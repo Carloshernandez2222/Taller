@@ -1,5 +1,6 @@
 from collections.abc import Generator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,6 +10,7 @@ from sqlmodel import Session, SQLModel, create_engine, select
 
 from models import Usuario
 
+BASE_DIR = Path(__file__).resolve().parent
 DATABASE_URL = "sqlite:///./usuarios.db"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 
@@ -56,6 +58,12 @@ def obtener(user_id: int, session: Session = Depends(get_session)):
 
 @app.post("/usuarios", response_model=Usuario)
 def crear(usuario: Usuario, session: Session = Depends(get_session)):
+    existe = session.exec(select(Usuario).where(Usuario.email == usuario.email)).first()
+    if existe:
+        raise HTTPException(
+            status_code=409,
+            detail="Ya existe un usuario registrado con ese correo electrónico",
+        )
     session.add(usuario)
     session.commit()
     session.refresh(usuario)
@@ -67,12 +75,12 @@ def crear_usuario_legacy():
     return {"mensaje": "Usuario creado"}
 
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 
 @app.get("/")
 def root():
-    return FileResponse("static/index.html")
+    return FileResponse(BASE_DIR / "static" / "index.html")
 
 
 if __name__ == "__main__":
